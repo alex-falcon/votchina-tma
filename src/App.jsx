@@ -1,0 +1,300 @@
+import React, { useState, useEffect } from 'react';
+import { Pickaxe, Scroll, Skull, Crown, Users, Zap, Shield, ChevronUp, Swords, BookOpen } from 'lucide-react';
+
+// --- КОНФИГ И СТЕЙТ ИГРОКА ---
+const MAX_ENERGY = 10;
+const MAX_PATIENCE = 10;
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState('work');
+  const [clickEffect, setClickEffect] = useState(false);
+  
+  // Стейт игрока (мокаем данные из твоей БД)
+  const [player, setPlayer] = useState({
+    name: 'Алекс',
+    rank: 'Холоп',
+    kopecks: 0,
+    debt: 300,
+    energy: 10,
+    patience: 10,
+    slaves: 0,
+    boss: 'Боярин Морозов',
+  });
+
+  // Эффект тряски экрана при клике
+  const triggerShake = () => {
+    setClickEffect(true);
+    setTimeout(() => setClickEffect(false), 200);
+  };
+
+  // Механика "Батрачить"
+  const handleWork = () => {
+    if (player.energy <= 0) {
+      alert("Сил нет, барин! Иди в лавку за медовухой.");
+      return;
+    }
+
+    triggerShake();
+    
+    let earned = 6;
+    let bossTax = player.boss ? 4 : 0;
+    let myShare = earned - bossTax;
+    let newDebt = player.debt;
+
+    if (newDebt > 0) {
+      if (newDebt >= myShare) {
+        newDebt -= myShare;
+        myShare = 0;
+      } else {
+        myShare -= newDebt;
+        newDebt = 0;
+      }
+    }
+
+    setPlayer(prev => ({
+      ...prev,
+      energy: prev.energy - 1,
+      kopecks: prev.kopecks + myShare,
+      debt: newDebt
+    }));
+  };
+
+  // Механика покупки (мокаем)
+  const buyItem = (itemName, price, type) => {
+    if (type === 'energy') {
+      setPlayer(prev => ({ ...prev, energy: MAX_ENERGY }));
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-screen max-w-md mx-auto bg-stone-950 text-stone-200 font-serif overflow-hidden relative">
+      {/* Эффект грязи/виньетки на фоне */}
+      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-transparent via-stone-950/80 to-stone-950 opacity-90 z-0"></div>
+
+      {/* --- ВЕРХНЯЯ ПАНЕЛЬ (ГРАМОТА/СТАТУС) --- */}
+      <header className="relative z-10 bg-stone-900 border-b-2 border-amber-900/50 p-4 shadow-xl">
+        <div className="flex justify-between items-center mb-2">
+          <div>
+            <h1 className="text-xl font-bold text-amber-500 uppercase tracking-wider">{player.name}</h1>
+            <div className="text-sm text-stone-400 flex items-center gap-1">
+              <Crown size={14} className="text-amber-600" />
+              {player.rank} {player.boss && <span className="text-stone-600 text-xs">(Раб: {player.boss})</span>}
+            </div>
+          </div>
+          <div className="text-right bg-stone-950 p-2 rounded border border-stone-800">
+            <div className="text-amber-400 font-bold flex justify-end items-center gap-1">
+              {player.kopecks} <span className="text-xs text-stone-500">коп.</span>
+            </div>
+            {player.debt > 0 && (
+              <div className="text-red-500 text-xs font-bold mt-1">
+                Долг: {player.debt}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Прогресс бары */}
+        <div className="flex gap-4">
+          <div className="flex-1">
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-yellow-500 flex items-center gap-1"><Zap size={10}/> Энергия</span>
+              <span>{player.energy}/{MAX_ENERGY}</span>
+            </div>
+            <div className="h-2 bg-stone-950 rounded-full overflow-hidden border border-stone-800">
+              <div className="h-full bg-gradient-to-r from-yellow-700 to-yellow-400 transition-all" style={{width: `${(player.energy/MAX_ENERGY)*100}%`}}></div>
+            </div>
+          </div>
+          <div className="flex-1">
+            <div className="flex justify-between text-xs mb-1">
+              <span className="text-blue-500 flex items-center gap-1"><Shield size={10}/> Терпение</span>
+              <span>{player.patience}/{MAX_PATIENCE}</span>
+            </div>
+            <div className="h-2 bg-stone-950 rounded-full overflow-hidden border border-stone-800">
+              <div className="h-full bg-gradient-to-r from-blue-700 to-blue-400 transition-all" style={{width: `${(player.patience/MAX_PATIENCE)*100}%`}}></div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* --- ОСНОВНАЯ ЗОНА (КОНТЕНТ) --- */}
+      <main className="flex-1 relative z-10 overflow-y-auto p-4 pb-24 scrollbar-hide">
+        
+        {/* ВКЛАДКА: БАТРАЧИТЬ (ГЛАВНАЯ) */}
+        {activeTab === 'work' && (
+          <div className="flex flex-col items-center justify-center h-full space-y-8">
+            <div className="text-center">
+              <h2 className="text-3xl font-black text-stone-400 opacity-20 uppercase tracking-widest absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 -z-10">ГАЛЕРЫ</h2>
+            </div>
+            
+            <button 
+              onClick={handleWork}
+              className={`
+                relative group w-48 h-48 rounded-full bg-stone-800 flex flex-col items-center justify-center
+                border-4 border-stone-700 shadow-[0_0_30px_rgba(0,0,0,0.8)]
+                active:scale-95 transition-transform duration-100
+                ${clickEffect ? 'animate-pulse bg-stone-700 border-amber-800' : ''}
+                ${player.energy === 0 ? 'opacity-50 grayscale cursor-not-allowed' : ''}
+              `}
+            >
+              <div className="absolute inset-2 rounded-full border border-stone-600/30"></div>
+              <Pickaxe size={64} className={`mb-2 ${player.energy > 0 ? 'text-stone-400 group-active:text-amber-500 group-active:-rotate-12 transition-all' : 'text-stone-600'}`} />
+              <span className="font-bold text-xl uppercase tracking-widest">Батрачить</span>
+              <span className="text-xs text-stone-500 mt-1">-1 Энергия</span>
+            </button>
+
+            {player.boss && (
+              <div className="text-sm text-stone-500 bg-stone-900/50 px-4 py-2 rounded-lg border border-red-900/30">
+                Отработка оброка для: <span className="text-red-400">{player.boss}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ВКЛАДКА: ВЛАСТЬ (ДОНОСЫ И ПИРАМИДА) */}
+        {activeTab === 'power' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <h2 className="text-xl font-bold text-amber-500 border-b border-stone-800 pb-2 flex items-center gap-2">
+              <Crown className="text-amber-600" /> Иерархия & Власть
+            </h2>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <button className="bg-stone-900 border border-stone-700 p-4 rounded-xl flex flex-col items-center gap-2 active:bg-stone-800">
+                <Users size={24} className="text-blue-500" />
+                <span className="text-sm font-bold">Моя Пирамида</span>
+                <span className="text-xs text-stone-500">Душ: {player.slaves}</span>
+              </button>
+              
+              <button className="bg-red-950 border border-red-900 p-4 rounded-xl flex flex-col items-center gap-2 active:bg-red-900 text-red-200">
+                <Scroll size={24} className="text-red-500" />
+                <span className="text-sm font-bold text-center">Накатать Донос</span>
+                <span className="text-xs text-red-700">Анонимно</span>
+              </button>
+
+              <button className="bg-stone-900 border border-stone-700 p-4 rounded-xl flex flex-col items-center gap-2 active:bg-stone-800 col-span-2">
+                <Swords size={24} className="text-stone-400" />
+                <span className="text-sm font-bold">Сбежать в Казаки</span>
+                <span className="text-xs text-yellow-600">Цена: 50 Stars</span>
+              </button>
+            </div>
+
+            <div className="mt-6 bg-stone-900/80 rounded-xl p-4 border border-stone-800">
+              <h3 className="text-sm font-bold text-stone-400 mb-3 flex justify-between">
+                <span>Социальный Лифт</span>
+                <span className="text-amber-600">{player.rank}</span>
+              </h3>
+              <p className="text-xs text-stone-500 mb-3">Собери 2 души, чтобы стать Мужиком и перестать быть Холопом.</p>
+              <div className="w-full bg-stone-950 h-2 rounded-full overflow-hidden">
+                <div className="bg-amber-600 h-full w-[10%]"></div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ВКЛАДКА: РЫНОК (МАГАЗИН И УНИЖЕНИЯ) */}
+        {activeTab === 'shop' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+             <div>
+              <h2 className="text-xl font-bold text-amber-500 border-b border-stone-800 pb-2 mb-4 flex items-center gap-2">
+                <BookOpen className="text-amber-600" /> Теневой Рынок
+              </h2>
+              <div className="space-y-3">
+                <div className="bg-stone-900 border border-stone-800 p-3 rounded-xl flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-stone-950 rounded-full border border-yellow-900/50 flex items-center justify-center">
+                      <Zap size={20} className="text-yellow-600"/>
+                    </div>
+                    <div>
+                      <div className="font-bold text-sm">Медовуха</div>
+                      <div className="text-xs text-stone-500">Фулл Энергия (10/10)</div>
+                    </div>
+                  </div>
+                  <button onClick={() => buyItem('energy', 30, 'energy')} className="bg-stone-800 hover:bg-stone-700 text-yellow-500 text-xs font-bold py-2 px-4 rounded-lg flex items-center gap-1 border border-stone-700">
+                    30 ⭐️
+                  </button>
+                </div>
+                
+                <div className="bg-stone-900 border border-stone-800 p-3 rounded-xl flex justify-between items-center">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-stone-950 rounded-full border border-purple-900/50 flex items-center justify-center">
+                      <Shield size={20} className="text-purple-600"/>
+                    </div>
+                    <div>
+                      <div className="font-bold text-sm">Стелс-накидка</div>
+                      <div className="text-xs text-stone-500">Защита от доносов (1ч)</div>
+                    </div>
+                  </div>
+                  <button className="bg-stone-800 hover:bg-stone-700 text-yellow-500 text-xs font-bold py-2 px-4 rounded-lg flex items-center gap-1 border border-stone-700">
+                    50 ⭐️
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h2 className="text-xl font-bold text-red-500 border-b border-red-900/30 pb-2 mb-4 flex items-center gap-2 mt-8">
+                <Skull className="text-red-600" /> Лавка Унижений
+              </h2>
+              <p className="text-xs text-stone-500 mb-3">Плати Stars, чтобы наказать чернь публично на Площади.</p>
+              
+              <div className="bg-red-950/30 border border-red-900/50 p-4 rounded-xl flex flex-col items-center justify-center opacity-70">
+                <Skull size={32} className="text-red-900 mb-2" />
+                <span className="text-sm font-bold text-stone-400">Требуется статус выше</span>
+                <span className="text-xs text-stone-600 text-center mt-1">Ты Холоп. Унижать пока некого. Батрачь дальше.</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* --- НИЖНЯЯ НАВИГАЦИЯ (BOTTOM NAV) --- */}
+      <nav className="absolute bottom-0 w-full bg-stone-950 border-t-2 border-stone-800 z-50">
+        <div className="flex justify-around items-center h-16 px-2">
+          <NavBtn 
+            icon={<Pickaxe size={24} />} 
+            label="Грязь" 
+            active={activeTab === 'work'} 
+            onClick={() => setActiveTab('work')} 
+          />
+          <NavBtn 
+            icon={<Crown size={24} />} 
+            label="Власть" 
+            active={activeTab === 'power'} 
+            onClick={() => setActiveTab('power')} 
+          />
+          <div className="relative -top-5">
+            <button className="w-14 h-14 bg-gradient-to-b from-amber-600 to-amber-800 rounded-full flex items-center justify-center border-4 border-stone-950 shadow-lg shadow-amber-900/20 text-stone-950">
+              <Scroll size={28} />
+            </button>
+          </div>
+          <NavBtn 
+            icon={<BookOpen size={24} />} 
+            label="Рынок" 
+            active={activeTab === 'shop'} 
+            onClick={() => setActiveTab('shop')} 
+          />
+          <NavBtn 
+            icon={<Users size={24} />} 
+            label="Площадь" 
+            active={activeTab === 'square'} 
+            onClick={() => alert('Тут будет лента слухов')} 
+          />
+        </div>
+      </nav>
+    </div>
+  );
+}
+
+// Компонент кнопки навигации
+function NavBtn({ icon, label, active, onClick }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={`flex flex-col items-center justify-center w-16 gap-1 transition-colors ${active ? 'text-amber-500' : 'text-stone-500 hover:text-stone-300'}`}
+    >
+      <div className={`${active ? 'animate-bounce-small' : ''}`}>
+        {icon}
+      </div>
+      <span className="text-[10px] font-medium tracking-wide">{label}</span>
+    </button>
+  );
+}
