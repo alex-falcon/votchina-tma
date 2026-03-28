@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Pickaxe, Scroll, Skull, Crown, Users, Zap, Shield, ChevronUp, Swords, BookOpen } from 'lucide-react';
+import { Pickaxe, Scroll, Skull, Crown, Users, Zap, Shield, Swords, BookOpen } from 'lucide-react';
 
-// --- КОНФИГ И СТЕЙТ ИГРОКА ---
+// ==========================================
+// ВАСЯ: Конфиг API
+// ==========================================
+const API_BASE_URL = 'https://api.viviral.net/api';
 const MAX_ENERGY = 10;
 const MAX_PATIENCE = 10;
 
@@ -9,62 +12,116 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('work');
   const [clickEffect, setClickEffect] = useState(false);
   
-  // Стейт игрока (мокаем данные из твоей БД)
+  // Состояния загрузки и ID
+  const [loading, setLoading] = useState(true);
+  const [tgId, setTgId] = useState(null);
+
+  // Стейт игрока (пустой по умолчанию)
   const [player, setPlayer] = useState({
-    name: 'Алекс',
+    name: '...',
     rank: 'Холоп',
     kopecks: 0,
-    debt: 300,
+    debt: 0,
     energy: 10,
     patience: 10,
-    slaves: 0,
-    boss: 'Боярин Морозов',
+    boss_id: 0
   });
 
-  // Эффект тряски экрана при клике
+  // ==========================================
+  // ИНИЦИАЛИЗАЦИЯ (Загрузка данных с сервера)
+  // ==========================================
+  useEffect(() => {
+    // 1. Инициализируем Telegram WebApp
+    const tg = window.Telegram?.WebApp;
+    let userId = 123456789; // Дефолт (на случай если ты открыл просто в браузере, а не в ТГ)
+
+    if (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) {
+      tg.ready();
+      tg.expand(); // Разворачиваем игру на весь экран телефона
+      userId = tg.initDataUnsafe.user.id;
+    }
+    setTgId(userId);
+
+    // 2. Делаем запрос к твоему VPS
+    fetch(`${API_BASE_URL}/player/${userId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!data.detail) {
+          setPlayer(data); // Записываем реальные данные из БД!
+        } else {
+          console.error("Сервер ответил:", data.detail);
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Ошибка сети:", err);
+        setLoading(false);
+      });
+  }, []);
+
   const triggerShake = () => {
     setClickEffect(true);
     setTimeout(() => setClickEffect(false), 200);
   };
 
-  // Механика "Батрачить"
-  const handleWork = () => {
+  // ==========================================
+  // МЕХАНИКА: БАТРАЧИТЬ (POST запрос)
+  // ==========================================
+  const handleWork = async () => {
     if (player.energy <= 0) {
-      alert("Сил нет, барин! Иди в лавку за медовухой.");
+      if (window.Telegram?.WebApp) {
+        window.Telegram.WebApp.showAlert("Сил нет, барин! Иди в лавку за медовухой.");
+      } else {
+        alert("Сил нет, барин! Иди в лавку за медовухой.");
+      }
       return;
     }
 
     triggerShake();
-    
-    let earned = 6;
-    let bossTax = player.boss ? 4 : 0;
-    let myShare = earned - bossTax;
-    let newDebt = player.debt;
 
-    if (newDebt > 0) {
-      if (newDebt >= myShare) {
-        newDebt -= myShare;
-        myShare = 0;
+    try {
+      const res = await fetch(`${API_BASE_URL}/work`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tg_id: tgId })
+      });
+      const data = await res.json();
+
+      if (data.status === 'success') {
+        // Обновляем циферки на экране
+        setPlayer(prev => ({
+          ...prev,
+          energy: data.new_energy,
+          kopecks: prev.kopecks + data.earned,
+          debt: data.new_debt
+        }));
+        
+        // Вибрация телефона (Кайф!)
+        if (window.Telegram?.WebApp?.HapticFeedback) {
+          window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
+        }
       } else {
-        myShare -= newDebt;
-        newDebt = 0;
+        if (window.Telegram?.WebApp) window.Telegram.WebApp.showAlert(data.detail);
       }
+    } catch (err) {
+      console.error("Ошибка при батрачестве:", err);
     }
-
-    setPlayer(prev => ({
-      ...prev,
-      energy: prev.energy - 1,
-      kopecks: prev.kopecks + myShare,
-      debt: newDebt
-    }));
   };
 
   // Механика покупки (мокаем)
   const buyItem = (itemName, price, type) => {
-    if (type === 'energy') {
-      setPlayer(prev => ({ ...prev, energy: MAX_ENERGY }));
-    }
+    const msg = "Скоро добавим оплату в Telegram Stars!";
+    if (window.Telegram?.WebApp) window.Telegram.WebApp.showAlert(msg);
+    else alert(msg);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-stone-950 text-amber-500 font-serif text-xl animate-pulse">
+        Загрузка летописи...
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-stone-950 text-stone-200 font-serif overflow-hidden relative">
@@ -78,7 +135,7 @@ export default function App() {
             <h1 className="text-xl font-bold text-amber-500 uppercase tracking-wider">{player.name}</h1>
             <div className="text-sm text-stone-400 flex items-center gap-1">
               <Crown size={14} className="text-amber-600" />
-              {player.rank} {player.boss && <span className="text-stone-600 text-xs">(Раб: {player.boss})</span>}
+              {player.rank} {player.boss_id !== 0 && <span className="text-stone-600 text-xs">(Барин ID: {player.boss_id})</span>}
             </div>
           </div>
           <div className="text-right bg-stone-950 p-2 rounded border border-stone-800">
@@ -117,7 +174,7 @@ export default function App() {
       </header>
 
       {/* --- ОСНОВНАЯ ЗОНА (КОНТЕНТ) --- */}
-      <main className="flex-1 relative z-10 overflow-y-auto p-4 pb-24 scrollbar-hide">
+      <main className="flex-1 relative z-10 overflow-y-auto p-4 pb-24">
         
         {/* ВКЛАДКА: БАТРАЧИТЬ (ГЛАВНАЯ) */}
         {activeTab === 'work' && (
@@ -142,9 +199,9 @@ export default function App() {
               <span className="text-xs text-stone-500 mt-1">-1 Энергия</span>
             </button>
 
-            {player.boss && (
+            {player.boss_id !== 0 && (
               <div className="text-sm text-stone-500 bg-stone-900/50 px-4 py-2 rounded-lg border border-red-900/30">
-                Отработка оброка для: <span className="text-red-400">{player.boss}</span>
+                Отработка оброка для Барина
               </div>
             )}
           </div>
@@ -161,7 +218,6 @@ export default function App() {
               <button className="bg-stone-900 border border-stone-700 p-4 rounded-xl flex flex-col items-center gap-2 active:bg-stone-800">
                 <Users size={24} className="text-blue-500" />
                 <span className="text-sm font-bold">Моя Пирамида</span>
-                <span className="text-xs text-stone-500">Душ: {player.slaves}</span>
               </button>
               
               <button className="bg-red-950 border border-red-900 p-4 rounded-xl flex flex-col items-center gap-2 active:bg-red-900 text-red-200">
@@ -175,17 +231,6 @@ export default function App() {
                 <span className="text-sm font-bold">Сбежать в Казаки</span>
                 <span className="text-xs text-yellow-600">Цена: 50 Stars</span>
               </button>
-            </div>
-
-            <div className="mt-6 bg-stone-900/80 rounded-xl p-4 border border-stone-800">
-              <h3 className="text-sm font-bold text-stone-400 mb-3 flex justify-between">
-                <span>Социальный Лифт</span>
-                <span className="text-amber-600">{player.rank}</span>
-              </h3>
-              <p className="text-xs text-stone-500 mb-3">Собери 2 души, чтобы стать Мужиком и перестать быть Холопом.</p>
-              <div className="w-full bg-stone-950 h-2 rounded-full overflow-hidden">
-                <div className="bg-amber-600 h-full w-[10%]"></div>
-              </div>
             </div>
           </div>
         )}
@@ -212,34 +257,6 @@ export default function App() {
                     30 ⭐️
                   </button>
                 </div>
-                
-                <div className="bg-stone-900 border border-stone-800 p-3 rounded-xl flex justify-between items-center">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-stone-950 rounded-full border border-purple-900/50 flex items-center justify-center">
-                      <Shield size={20} className="text-purple-600"/>
-                    </div>
-                    <div>
-                      <div className="font-bold text-sm">Стелс-накидка</div>
-                      <div className="text-xs text-stone-500">Защита от доносов (1ч)</div>
-                    </div>
-                  </div>
-                  <button className="bg-stone-800 hover:bg-stone-700 text-yellow-500 text-xs font-bold py-2 px-4 rounded-lg flex items-center gap-1 border border-stone-700">
-                    50 ⭐️
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h2 className="text-xl font-bold text-red-500 border-b border-red-900/30 pb-2 mb-4 flex items-center gap-2 mt-8">
-                <Skull className="text-red-600" /> Лавка Унижений
-              </h2>
-              <p className="text-xs text-stone-500 mb-3">Плати Stars, чтобы наказать чернь публично на Площади.</p>
-              
-              <div className="bg-red-950/30 border border-red-900/50 p-4 rounded-xl flex flex-col items-center justify-center opacity-70">
-                <Skull size={32} className="text-red-900 mb-2" />
-                <span className="text-sm font-bold text-stone-400">Требуется статус выше</span>
-                <span className="text-xs text-stone-600 text-center mt-1">Ты Холоп. Унижать пока некого. Батрачь дальше.</span>
               </div>
             </div>
           </div>
@@ -276,7 +293,9 @@ export default function App() {
             icon={<Users size={24} />} 
             label="Площадь" 
             active={activeTab === 'square'} 
-            onClick={() => alert('Тут будет лента слухов')} 
+            onClick={() => {
+                if(window.Telegram?.WebApp) window.Telegram.WebApp.showAlert("Слухи пишутся...");
+            }} 
           />
         </div>
       </nav>
